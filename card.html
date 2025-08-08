@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Poker Showdown</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #4ca1af);
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #f1c40f;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .game-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .card {
+            width: 80px;
+            height: 120px;
+            background: white;
+            border-radius: 8px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin: 5px;
+            font-size: 24px;
+            color: black;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            position: relative;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+        }
+        .card.red {
+            color: #e74c3c;
+        }
+        .card.black {
+            color: #2c3e50;
+        }
+        .card::before, .card::after {
+            position: absolute;
+            font-size: 16px;
+        }
+        .card::before {
+            top: 5px;
+            left: 5px;
+        }
+        .card::after {
+            bottom: 5px;
+            right: 5px;
+            transform: rotate(180deg);
+        }
+        .player-area, .computer-area {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .player-area {
+            background-color: rgba(46, 204, 113, 0.2);
+        }
+        .computer-area {
+            background-color: rgba(231, 76, 60, 0.2);
+        }
+        button {
+            background-color: #f1c40f;
+            color: #2c3e50;
+            border: none;
+            padding: 12px 25px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background-color: #f39c12;
+            transform: scale(1.05);
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .result {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            min-height: 36px;
+            color: #f1c40f;
+        }
+        .score {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Quick Poker Showdown</h1>
+        <div class="score">Player: <span id="playerScore">0</span> | Computer: <span id="computerScore">0</span></div>
+        
+        <div class="computer-area">
+            <h2>Computer</h2>
+            <div id="computerCards"></div>
+        </div>
+        
+        <div class="result" id="result"></div>
+        
+        <div class="player-area">
+            <h2>Your Cards</h2>
+            <div id="playerCards"></div>
+        </div>
+        
+        <div class="controls">
+            <button id="dealBtn">Deal Cards</button>
+            <button id="drawBtn" disabled>Draw Cards</button>
+            <button id="standBtn" disabled>Stand</button>
+            <button id="newGameBtn">New Game</button>
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const dealBtn = document.getElementById('dealBtn');
+        const drawBtn = document.getElementById('drawBtn');
+        const standBtn = document.getElementById('standBtn');
+        const newGameBtn = document.getElementById('newGameBtn');
+        const playerCardsDiv = document.getElementById('playerCards');
+        const computerCardsDiv = document.getElementById('computerCards');
+        const resultDiv = document.getElementById('result');
+        const playerScoreSpan = document.getElementById('playerScore');
+        const computerScoreSpan = document.getElementById('computerScore');
+        
+        // Game variables
+        let deck = [];
+        let playerHand = [];
+        let computerHand = [];
+        let playerScore = 0;
+        let computerScore = 0;
+        let gameState = 'waiting'; // waiting, dealing, drawing, standing, gameOver
+        
+        // Card suits and values
+        const suits = ['?', '?', '?', '?'];
+        const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        
+        // Initialize a new deck
+        function createDeck() {
+            let deck = [];
+            for (let suit of suits) {
+                for (let value of values) {
+                    deck.push({ suit, value });
+                }
+            }
+            return shuffleDeck(deck);
+        }
+        
+        // Shuffle the deck
+        function shuffleDeck(deck) {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        }
+        
+        // Create a card element
+        function createCardElement(card, hidden = false) {
+            const cardElement = document.createElement('div');
+            cardElement.className = `card ${card.suit === '?' || card.suit === '?' ? 'red' : 'black'}`;
+            
+            if (hidden) {
+                cardElement.textContent = '??';
+                cardElement.style.background = 'linear-gradient(135deg, #3498db, #2c3e50)';
+                cardElement.style.color = 'white';
+            } else {
+                cardElement.textContent = card.suit;
+                cardElement.setAttribute('data-value', card.value);
+                cardElement.setAttribute('data-suit', card.suit);
+                
+                // Add value indicators to corners
+                cardElement.insertAdjacentHTML('beforeend', 
+                    `<span style="position:absolute;top:5px;left:5px;">${card.value}</span>
+                     <span style="position:absolute;bottom:5px;right:5px;transform:rotate(180deg);">${card.value}</span>`);
+            }
+            
+            return cardElement;
+        }
+        
+        // Deal initial cards
+        function dealCards() {
+            gameState = 'dealing';
+            deck = createDeck();
+            playerHand = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+            computerHand = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+            
+            // Display cards
+            playerCardsDiv.innerHTML = '';
+            computerCardsDiv.innerHTML = '';
+            
+            playerHand.forEach(card => {
+                playerCardsDiv.appendChild(createCardElement(card));
+            });
+            
+            // Show computer's first card face down
+            computerCardsDiv.appendChild(createCardElement(computerHand[0], true));
+            for (let i = 1; i < computerHand.length; i++) {
+                computerCardsDiv.appendChild(createCardElement({suit:'',value:''}, true));
+            }
+            
+            // Enable/disable buttons
+            dealBtn.disabled = true;
+            drawBtn.disabled = false;
+            standBtn.disabled = false;
+            
+            resultDiv.textContent = 'Select cards to replace or click Stand';
+        }
+        
+        // Draw new cards
+        function drawCards() {
+            gameState = 'drawing';
+            
+            // Get selected cards
+            const cards = playerCardsDiv.querySelectorAll('.card');
+            let cardsToReplace = [];
+            
+            cards.forEach((card, index) => {
+                if (card.classList.contains('selected')) {
+                    cardsToReplace.push(index);
+                }
+            });
+            
+            // Replace selected cards
+            cardsToReplace.forEach(index => {
+                if (deck.length > 0) {
+                    playerHand[index] = deck.pop();
+                }
+            });
+            
+            // Redisplay player's cards
+            playerCardsDiv.innerHTML = '';
+            playerHand.forEach(card => {
+                playerCardsDiv.appendChild(createCardElement(card));
+            });
+            
+            // Computer draws cards (simple AI - replaces if card is 7 or lower)
+            computerHand.forEach((card, index) => {
+                const cardValue = values.indexOf(card.value);
+                if (cardValue <= 5 && deck.length > 0) { // 2-7
+                    computerHand[index] = deck.pop();
+                }
+            });
+            
+            // Reveal computer's cards
+            computerCardsDiv.innerHTML = '';
+            computerHand.forEach(card => {
+                computerCardsDiv.appendChild(createCardElement(card));
+            });
+            
+            // Evaluate hands
+            evaluateHands();
+            
+            // Disable buttons
+            drawBtn.disabled = true;
+            standBtn.disabled = true;
+            dealBtn.disabled = false;
+            
+            gameState = 'gameOver';
+        }
+        
+        // Stand (no cards drawn)
+        function stand() {
+            gameState = 'standing';
+            
+            // Computer draws cards (same simple AI)
+            computerHand.forEach((card, index) => {
+                const cardValue = values.indexOf(card.value);
+                if (cardValue <= 5 && deck.length > 0) { // 2-7
+                    computerHand[index] = deck.pop();
+                }
+            });
+            
+            // Reveal computer's cards
+            computerCardsDiv.innerHTML = '';
+            computerHand.forEach(card => {
+                computerCardsDiv.appendChild(createCardElement(card));
+            });
+            
+            // Evaluate hands
+            evaluateHands();
+            
+            // Disable buttons
+            drawBtn.disabled = true;
+            standBtn.disabled = true;
+            dealBtn.disabled = false;
+            
+            gameState = 'gameOver';
+        }
+        
+        // Evaluate and compare hands
+        function evaluateHands() {
+            const playerRank = getHandRank(playerHand);
+            const computerRank = getHandRank(computerHand);
+            
+            // Simple hand evaluation (for demo purposes)
+            const handNames = [
+                "High Card", "One Pair", "Two Pair", 
+                "Three of a Kind", "Straight", "Flush", 
+                "Full House", "Four of a Kind", "Straight Flush", "Royal Flush"
+            ];
+            
+            resultDiv.innerHTML = `
+                <div>Your hand: <strong>${handNames[playerRank]}</strong></div>
+                <div>Computer's hand: <strong>${handNames[computerRank]}</strong></div>
+            `;
+            
+            // Determine winner
+            if (playerRank > computerRank) {
+                resultDiv.innerHTML += '<div style="color:#2ecc71;margin-top:10px;">You win this round!</div>';
+                playerScore++;
+            } else if (computerRank > playerRank) {
+                resultDiv.innerHTML += '<div style="color:#e74c3c;margin-top:10px;">Computer wins this round!</div>';
+                computerScore++;
+            } else {
+                resultDiv.innerHTML += '<div style="color:#f1c40f;margin-top:10px;">It\'s a tie!</div>';
+            }
+            
+            // Update scores
+            playerScoreSpan.textContent = playerScore;
+            computerScoreSpan.textContent = computerScore;
+        }
+        
+        // Simple hand ranking system (for demo)
+        function getHandRank(hand) {
+            // Count values and suits
+            const valueCounts = {};
+            const suitCounts = {};
+            const valuesOrder = [];
+            
+            hand.forEach(card => {
+                valueCounts[card.value] = (valueCounts[card.value] || 0) + 1;
+                suitCounts[card.suit] = (suitCounts[card.suit] || 0) + 1;
+                valuesOrder.push(values.indexOf(card.value));
+            });
+            
+            valuesOrder.sort((a, b) => a - b);
+            
+            // Check for pairs, three of a kind, etc.
+            const counts = Object.values(valueCounts).sort((a,b) => b - a);
+            
+            // Check for flush (all same suit)
+            const isFlush = Object.values(suitCounts).some(count => count === 5);
+            
+            // Check for straight
+            let isStraight = true;
+            for (let i = 1; i < valuesOrder.length; i++) {
+                if (valuesOrder[i] !== valuesOrder[i-1] + 1) {
+                    isStraight = false;
+                    break;
+                }
+            }
+            
+            // Special case for low straight (A-2-3-4-5)
+            if (!isStraight && valuesOrder.join(',') === '0,1,2,3,12') {
+                isStraight = true;
+                valuesOrder = [0,1,2,3,3]; // Adjust for comparison
+            }
+            
+            // Royal flush
+            if (isFlush && isStraight && valuesOrder[4] === 12) return 9;
+            // Straight flush
+            if (isFlush && isStraight) return 8;
+            // Four of a kind
+            if (counts[0] === 4) return 7;
+            // Full house
+            if (counts[0] === 3 && counts[1] === 2) return 6;
+            // Flush
+            if (isFlush) return 5;
+            // Straight
+            if (isStraight) return 4;
+            // Three of a kind
+            if (counts[0] === 3) return 3;
+            // Two pair
+            if (counts[0] === 2 && counts[1] === 2) return 2;
+            // One pair
+            if (counts[0] === 2) return 1;
+            // High card
+            return 0;
+        }
+        
+        // New game
+        function newGame() {
+            playerScore = 0;
+            computerScore = 0;
+            playerScoreSpan.textContent = '0';
+            computerScoreSpan.textContent = '0';
+            playerCardsDiv.innerHTML = '';
+            computerCardsDiv.innerHTML = '';
+            resultDiv.textContent = '';
+            
+            dealBtn.disabled = false;
+            drawBtn.disabled = true;
+            standBtn.disabled = true;
+            
+            gameState = 'waiting';
+        }
+        
+        // Event listeners
+        dealBtn.addEventListener('click', dealCards);
+        drawBtn.addEventListener('click', drawCards);
+        standBtn.addEventListener('click', stand);
+        newGameBtn.addEventListener('click', newGame);
+        
+        // Card selection
+        playerCardsDiv.addEventListener('click', function(e) {
+            if (gameState !== 'dealing') return;
+            
+            const card = e.target.closest('.card');
+            if (card) {
+                card.classList.toggle('selected');
+                card.style.border = card.classList.contains('selected') ? '3px solid #f1c40f' : '2px solid #2e8b57';
+            }
+        });
+        
+        // Initialize game
+        newGame();
+    </script>
+</body>
+</html>
